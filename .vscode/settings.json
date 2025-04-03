@@ -5,7 +5,7 @@
     "idf.openOcdConfigs": [
         "board/esp32-ethernet-kit-3.3v.cfg"
     ],
-    "idf.portWin": "COM6",
+    "idf.portWin": "COM10",
     "idf.toolsPathWin": "C:\\.espressif",
     "idf.flashType": "UART"
 }

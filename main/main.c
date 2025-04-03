@@ -9,14 +9,14 @@
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
+#include "esp_netif.h"
 
 #define SSID "ESP_WiFi" //SSID
 #define Password "12345678" //Password，不填寫將設為開放網路
-#define channel WIFI_CHANNEL //Channel
-// #define max_con 10 //最大連結數量
-// #define IP "192.168.4.1" // 設定 AP 的 IP 位址
-// #define NETMASK "255.255.255.0" // 設定子網路遮罩
-// #define GATEWAY "192.168.4.1" // 設定閘道
+#define ap_channel 9 //Channel，設為0將自動設定
+#define max_con 10 //最大連線數
+#define ap_ip "192.168.100.1" //IP
+#define ap_netmask "255.255.255.0" //Netmask
 
 static const char *TAG = "[ESP32 AP]";
 
@@ -37,11 +37,23 @@ static void ap_event_handler(void* arg, esp_event_base_t event_base, int32_t eve
 /***** AP設定、初始化 *****/
 void wifi_ap(void)
 {
+    // const char *ip = "192.168.100.1";
+
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
-    // esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap(); // 取得 AP 的 netif
+    // esp_netif_create_default_wifi_ap();
+    esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap(); // 取得 AP 的 netif
 
+    ESP_ERROR_CHECK(esp_netif_dhcps_stop(ap_netif)); // 停止 DHCP
+
+    // 設定 IP
+    esp_netif_ip_info_t ip_info;
+    ip_info.ip.addr = esp_ip4addr_aton(ap_ip); // ip
+    ip_info.gw.addr = esp_ip4addr_aton(ap_ip); // gw
+    ip_info.netmask.addr = esp_ip4addr_aton(ap_netmask); // netmask
+    ESP_ERROR_CHECK(esp_netif_set_ip_info(ap_netif, &ip_info));
+
+    ESP_ERROR_CHECK(esp_netif_dhcps_start(ap_netif)); // 啟動 DHCP
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -52,20 +64,34 @@ void wifi_ap(void)
             .ssid = SSID,
             .ssid_len = strlen(SSID),
             .password = Password,
-            // .max_connection = max_con,
+            .max_connection = max_con,
+            .channel = ap_channel,
             .authmode = WIFI_AUTH_WPA_WPA2_PSK
         },
     };
 
+    // char log_pwd = wifi_config.ap.password;
     if (strlen(Password) == 0) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+        // log_pwd = "開放網路"; // 開放網路
     }
+
+    // if (ap_channel != 0) {
+    //     wifi_config.ap.channel = ap_channel; // 使用指定頻道
+    // }
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "AP已啟動, SSID=%s, Password=%s", SSID, Password);
+    esp_netif_ip_info_t current_ip_info; // 取得 IP
+    ESP_ERROR_CHECK(esp_netif_get_ip_info(ap_netif, &current_ip_info));
+    ESP_LOGI(TAG, "AP已啟動！");
+    ESP_LOGI(TAG, "SSID: %s, Password: %s", wifi_config.ap.ssid, wifi_config.ap.password);
+    // ESP_LOGI(TAG, "SSID: %s, Password: %s", wifi_config.ap.ssid, log_pwd);
+    ESP_LOGI(TAG, "IP: " IPSTR, IP2STR(&current_ip_info.ip));
+    ESP_LOGI(TAG, "Channel: %d", wifi_config.ap.channel);
+    ESP_LOGI(TAG, "最大連線數: %d", wifi_config.ap.max_connection);
 }
 
 /***** 主程式 *****/
